@@ -3,6 +3,7 @@
 import pymysql
 import struct
 
+from pkg_resources import parse_version
 from pymysql.constants.COMMAND import COM_BINLOG_DUMP, COM_REGISTER_SLAVE
 from pymysql.cursors import DictCursor
 from pymysql.util import int2byte
@@ -11,20 +12,26 @@ from .packet import BinLogPacketWrapper
 from .constants.BINLOG import TABLE_MAP_EVENT, ROTATE_EVENT
 from .gtid import GtidSet
 from .event import (
-    QueryEvent, RotateEvent, FormatDescriptionEvent,
-    XidEvent, GtidEvent, StopEvent,
-    BeginLoadQueryEvent, ExecuteLoadQueryEvent,
-    HeartbeatLogEvent, NotImplementedEvent)
+    QueryEvent,
+    RotateEvent,
+    FormatDescriptionEvent,
+    XidEvent,
+    GtidEvent,
+    StopEvent,
+    BeginLoadQueryEvent,
+    ExecuteLoadQueryEvent,
+    HeartbeatLogEvent,
+    NotImplementedEvent,
+)
 from .exceptions import BinLogNotEnabled
-from .row_event import (
-    UpdateRowsEvent, WriteRowsEvent, DeleteRowsEvent, TableMapEvent)
+from .row_event import UpdateRowsEvent, WriteRowsEvent, DeleteRowsEvent, TableMapEvent
 
 try:
     from pymysql.constants.COMMAND import COM_BINLOG_DUMP_GTID
 except ImportError:
     # Handle old pymysql versions
     # See: https://github.com/PyMySQL/PyMySQL/pull/261
-    COM_BINLOG_DUMP_GTID = 0x1e
+    COM_BINLOG_DUMP_GTID = 0x1E
 
 # 2013 Connection Lost
 # 2006 MySQL server has gone away
@@ -36,9 +43,9 @@ class ReportSlave(object):
     """Represent the values that you may report when connecting as a slave
     to a master. SHOW SLAVE HOSTS related"""
 
-    hostname = ''
-    username = ''
-    password = ''
+    hostname = ""
+    username = ""
+    password = ""
     port = 0
 
     def __init__(self, value):
@@ -58,7 +65,7 @@ class ReportSlave(object):
             except IndexError:
                 pass
         elif isinstance(value, dict):
-            for key in ['hostname', 'username', 'password', 'port']:
+            for key in ["hostname", "username", "password", "port"]:
                 try:
                     setattr(self, key, value[key])
                 except KeyError:
@@ -67,8 +74,12 @@ class ReportSlave(object):
             self.hostname = value
 
     def __repr__(self):
-        return '<ReportSlave hostname=%s username=%s password=%s port=%d>' %\
-            (self.hostname, self.username, self.password, self.port)
+        return "<ReportSlave hostname=%s username=%s password=%s port=%d>" % (
+            self.hostname,
+            self.username,
+            self.password,
+            self.port,
+        )
 
     def encoded(self, server_id, master_id=0):
         """
@@ -93,52 +104,73 @@ class ReportSlave(object):
         lusername = len(self.username.encode())
         lpassword = len(self.password.encode())
 
-        packet_len = (1 +  # command
-                      4 +  # server-id
-                      1 +  # hostname length
-                      lhostname +
-                      1 +  # username length
-                      lusername +
-                      1 +  # password length
-                      lpassword +
-                      2 +  # slave mysql port
-                      4 +  # replication rank
-                      4)  # master-id
+        packet_len = (
+            1
+            + 4  # command
+            + 1  # server-id
+            + lhostname  # hostname length
+            + 1
+            + lusername  # username length
+            + 1
+            + lpassword  # password length
+            + 2
+            + 4  # slave mysql port
+            + 4  # replication rank
+        )  # master-id
 
         MAX_STRING_LEN = 257  # one byte for length + 256 chars
 
-        return (struct.pack('<i', packet_len) +
-                int2byte(COM_REGISTER_SLAVE) +
-                struct.pack('<L', server_id) +
-                struct.pack('<%dp' % min(MAX_STRING_LEN, lhostname + 1),
-                            self.hostname.encode()) +
-                struct.pack('<%dp' % min(MAX_STRING_LEN, lusername + 1),
-                            self.username.encode()) +
-                struct.pack('<%dp' % min(MAX_STRING_LEN, lpassword + 1),
-                            self.password.encode()) +
-                struct.pack('<H', self.port) +
-                struct.pack('<l', 0) +
-                struct.pack('<l', master_id))
+        return (
+            struct.pack("<i", packet_len)
+            + int2byte(COM_REGISTER_SLAVE)
+            + struct.pack("<L", server_id)
+            + struct.pack(
+                "<%dp" % min(MAX_STRING_LEN, lhostname + 1), self.hostname.encode()
+            )
+            + struct.pack(
+                "<%dp" % min(MAX_STRING_LEN, lusername + 1), self.username.encode()
+            )
+            + struct.pack(
+                "<%dp" % min(MAX_STRING_LEN, lpassword + 1), self.password.encode()
+            )
+            + struct.pack("<H", self.port)
+            + struct.pack("<l", 0)
+            + struct.pack("<l", master_id)
+        )
 
 
 class BinLogStreamReader(object):
 
     """Connect to replication stream and read event
     """
+
     report_slave = None
 
-    def __init__(self, connection_settings, server_id,
-                 ctl_connection_settings=None, resume_stream=False,
-                 blocking=False, only_events=None, log_file=None,
-                 log_pos=None, filter_non_implemented_events=True,
-                 ignored_events=None, auto_position=None,
-                 only_tables=None, ignored_tables=None,
-                 only_schemas=None, ignored_schemas=None,
-                 freeze_schema=False, skip_to_timestamp=None,
-                 report_slave=None, slave_uuid=None,
-                 pymysql_wrapper=None,
-                 fail_on_table_metadata_unavailable=False,
-                 slave_heartbeat=None):
+    def __init__(
+        self,
+        connection_settings,
+        server_id,
+        ctl_connection_settings=None,
+        resume_stream=False,
+        blocking=False,
+        only_events=None,
+        log_file=None,
+        log_pos=None,
+        filter_non_implemented_events=True,
+        ignored_events=None,
+        auto_position=None,
+        only_tables=None,
+        ignored_tables=None,
+        only_schemas=None,
+        ignored_schemas=None,
+        freeze_schema=False,
+        skip_to_timestamp=None,
+        report_slave=None,
+        slave_uuid=None,
+        pymysql_wrapper=None,
+        fail_on_table_metadata_unavailable=False,
+        slave_heartbeat=None,
+    ):
         """
         Attributes:
             ctl_connection_settings: Connection settings for cluster holding
@@ -191,13 +223,15 @@ class BinLogStreamReader(object):
         self.__ignored_schemas = ignored_schemas
         self.__freeze_schema = freeze_schema
         self.__allowed_events = self._allowed_event_list(
-            only_events, ignored_events, filter_non_implemented_events)
+            only_events, ignored_events, filter_non_implemented_events
+        )
         self.__fail_on_table_metadata_unavailable = fail_on_table_metadata_unavailable
 
         # We can't filter on packet level TABLE_MAP and rotate event because
         # we need them for handling other operations
-        self.__allowed_events_in_packet = frozenset(
-            [TableMapEvent, RotateEvent]).union(self.__allowed_events)
+        self.__allowed_events_in_packet = frozenset([TableMapEvent, RotateEvent]).union(
+            self.__allowed_events
+        )
 
         self.__server_id = server_id
         self.__use_checksum = False
@@ -249,7 +283,7 @@ class BinLogStreamReader(object):
         if result is None:
             return False
         var, value = result[:2]
-        if value == 'NONE':
+        if value == "NONE":
             return False
         return True
 
@@ -259,7 +293,7 @@ class BinLogStreamReader(object):
 
         packet = self.report_slave.encoded(self.__server_id)
 
-        if pymysql.__version__ < "0.6":
+        if parse_version(pymysql.__version__) < parse_version("0.6"):
             self._stream_connection.wfile.write(packet)
             self._stream_connection.wfile.flush()
             self._stream_connection.read_packet()
@@ -291,11 +325,10 @@ class BinLogStreamReader(object):
 
         if self.slave_heartbeat:
             # 4294967 is documented as the max value for heartbeats
-            net_timeout = float(self.__connection_settings.get('read_timeout',
-                                                               4294967))
+            net_timeout = float(self.__connection_settings.get("read_timeout", 4294967))
             # If heartbeat is too low, the connection will disconnect before,
             # this is also the behavior in mysql
-            heartbeat = float(min(net_timeout/2., self.slave_heartbeat))
+            heartbeat = float(min(net_timeout / 2.0, self.slave_heartbeat))
             if heartbeat > 4294967:
                 heartbeat = 4294967
 
@@ -319,20 +352,21 @@ class BinLogStreamReader(object):
                 self.log_file, self.log_pos = master_status[:2]
                 cur.close()
 
-            prelude = struct.pack('<i', len(self.log_file) + 11) \
-                + int2byte(COM_BINLOG_DUMP)
+            prelude = struct.pack("<i", len(self.log_file) + 11) + int2byte(
+                COM_BINLOG_DUMP
+            )
 
             if self.__resume_stream:
-                prelude += struct.pack('<I', self.log_pos)
+                prelude += struct.pack("<I", self.log_pos)
             else:
-                prelude += struct.pack('<I', 4)
+                prelude += struct.pack("<I", 4)
 
             flags = 0
             if not self.__blocking:
                 flags |= 0x01  # BINLOG_DUMP_NON_BLOCK
-            prelude += struct.pack('<H', flags)
+            prelude += struct.pack("<H", flags)
 
-            prelude += struct.pack('<I', self.__server_id)
+            prelude += struct.pack("<I", self.__server_id)
             prelude += self.log_file.encode()
         else:
             # Format for mysql packet master_auto_position
@@ -373,15 +407,20 @@ class BinLogStreamReader(object):
             gtid_set = GtidSet(self.auto_position)
             encoded_data_size = gtid_set.encoded_length
 
-            header_size = (2 +  # binlog_flags
-                           4 +  # server_id
-                           4 +  # binlog_name_info_size
-                           4 +  # empty binlog name
-                           8 +  # binlog_pos_info_size
-                           4)  # encoded_data_size
+            header_size = (
+                2
+                + 4  # binlog_flags
+                + 4  # server_id
+                + 4  # binlog_name_info_size
+                + 8  # empty binlog name
+                + 4  # binlog_pos_info_size
+            )  # encoded_data_size
 
-            prelude = b'' + struct.pack('<i', header_size + encoded_data_size)\
+            prelude = (
+                b""
+                + struct.pack("<i", header_size + encoded_data_size)
                 + int2byte(COM_BINLOG_DUMP_GTID)
+            )
 
             flags = 0
             if not self.__blocking:
@@ -391,23 +430,23 @@ class BinLogStreamReader(object):
             # binlog_flags (2 bytes)
             # see:
             #  https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
-            prelude += struct.pack('<H', flags)
+            prelude += struct.pack("<H", flags)
 
             # server_id (4 bytes)
-            prelude += struct.pack('<I', self.__server_id)
+            prelude += struct.pack("<I", self.__server_id)
             # binlog_name_info_size (4 bytes)
-            prelude += struct.pack('<I', 3)
+            prelude += struct.pack("<I", 3)
             # empty_binlog_name (4 bytes)
-            prelude += b'\0\0\0'
+            prelude += b"\0\0\0"
             # binlog_pos_info (8 bytes)
-            prelude += struct.pack('<Q', 4)
+            prelude += struct.pack("<Q", 4)
 
             # encoded_data_size (4 bytes)
-            prelude += struct.pack('<I', gtid_set.encoded_length)
+            prelude += struct.pack("<I", gtid_set.encoded_length)
             # encoded_data
             prelude += gtid_set.encoded()
 
-        if pymysql.__version__ < "0.6":
+        if parse_version(pymysql.__version__) < parse_version("0.6"):
             self._stream_connection.wfile.write(prelude)
             self._stream_connection.wfile.flush()
         else:
@@ -424,7 +463,7 @@ class BinLogStreamReader(object):
                 self.__connect_to_ctl()
 
             try:
-                if pymysql.__version__ < "0.6":
+                if parse_version(pymysql.__version__) < parse_version("0.6"):
                     pkt = self._stream_connection.read_packet()
                 else:
                     pkt = self._stream_connection._read_packet()
@@ -443,16 +482,19 @@ class BinLogStreamReader(object):
             if not pkt.is_ok_packet():
                 continue
 
-            binlog_event = BinLogPacketWrapper(pkt, self.table_map,
-                                               self._ctl_connection,
-                                               self.__use_checksum,
-                                               self.__allowed_events_in_packet,
-                                               self.__only_tables,
-                                               self.__ignored_tables,
-                                               self.__only_schemas,
-                                               self.__ignored_schemas,
-                                               self.__freeze_schema,
-                                               self.__fail_on_table_metadata_unavailable)
+            binlog_event = BinLogPacketWrapper(
+                pkt,
+                self.table_map,
+                self._ctl_connection,
+                self.__use_checksum,
+                self.__allowed_events_in_packet,
+                self.__only_tables,
+                self.__ignored_tables,
+                self.__only_schemas,
+                self.__ignored_schemas,
+                self.__freeze_schema,
+                self.__fail_on_table_metadata_unavailable,
+            )
 
             if binlog_event.event_type == ROTATE_EVENT:
                 self.log_pos = binlog_event.event.position
@@ -494,42 +536,53 @@ class BinLogStreamReader(object):
             #   There are conditions under which the terminating
             #   log-rotation event does not occur. For example, the server
             #   might crash.
-            if self.skip_to_timestamp and binlog_event.timestamp < self.skip_to_timestamp:
+            if (
+                self.skip_to_timestamp
+                and binlog_event.timestamp < self.skip_to_timestamp
+            ):
                 continue
 
-            if binlog_event.event_type == TABLE_MAP_EVENT and \
-                    binlog_event.event is not None:
-                self.table_map[binlog_event.event.table_id] = \
-                    binlog_event.event.get_table()
+            if (
+                binlog_event.event_type == TABLE_MAP_EVENT
+                and binlog_event.event is not None
+            ):
+                self.table_map[
+                    binlog_event.event.table_id
+                ] = binlog_event.event.get_table()
 
             # event is none if we have filter it on packet level
             # we filter also not allowed events
-            if binlog_event.event is None or (binlog_event.event.__class__ not in self.__allowed_events):
+            if binlog_event.event is None or (
+                binlog_event.event.__class__ not in self.__allowed_events
+            ):
                 continue
 
             return binlog_event.event
 
-    def _allowed_event_list(self, only_events, ignored_events,
-                            filter_non_implemented_events):
+    def _allowed_event_list(
+        self, only_events, ignored_events, filter_non_implemented_events
+    ):
         if only_events is not None:
             events = set(only_events)
         else:
-            events = set((
-                QueryEvent,
-                RotateEvent,
-                StopEvent,
-                FormatDescriptionEvent,
-                XidEvent,
-                GtidEvent,
-                BeginLoadQueryEvent,
-                ExecuteLoadQueryEvent,
-                UpdateRowsEvent,
-                WriteRowsEvent,
-                DeleteRowsEvent,
-                TableMapEvent,
-                HeartbeatLogEvent,
-                NotImplementedEvent,
-                ))
+            events = set(
+                (
+                    QueryEvent,
+                    RotateEvent,
+                    StopEvent,
+                    FormatDescriptionEvent,
+                    XidEvent,
+                    GtidEvent,
+                    BeginLoadQueryEvent,
+                    ExecuteLoadQueryEvent,
+                    UpdateRowsEvent,
+                    WriteRowsEvent,
+                    DeleteRowsEvent,
+                    TableMapEvent,
+                    HeartbeatLogEvent,
+                    NotImplementedEvent,
+                )
+            )
         if ignored_events is not None:
             for e in ignored_events:
                 events.remove(e)
@@ -547,7 +600,8 @@ class BinLogStreamReader(object):
                     self.__connect_to_ctl()
 
                 cur = self._ctl_connection.cursor()
-                cur.execute("""
+                cur.execute(
+                    """
                     SELECT
                         COLUMN_NAME, COLLATION_NAME, CHARACTER_SET_NAME,
                         COLUMN_COMMENT, COLUMN_TYPE, COLUMN_KEY, ORDINAL_POSITION
@@ -556,7 +610,9 @@ class BinLogStreamReader(object):
                     WHERE
                         table_schema = %s AND table_name = %s
                     ORDER BY ORDINAL_POSITION
-                    """, (schema, table))
+                    """,
+                    (schema, table),
+                )
 
                 return cur.fetchall()
             except pymysql.OperationalError as error:
